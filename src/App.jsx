@@ -6,23 +6,14 @@ import {
   Briefcase, Gavel, Scale, Plus, Edit, Trash2, Upload, Eye, EyeOff,
   LogOut, ArrowUpDown, ListOrdered, BarChart3, History, User, Settings, Pin
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-
-// ==========================================
-// FIREBASE SETUP
-// ==========================================
-let app, auth, db, appId = 'default-app-id';
-try {
-  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyCQ4sey3h0wOjv0tNBRZpccA45uoThtPnY",
   authDomain: "satu-sop-3b737.firebaseapp.com",
   projectId: "satu-sop-3b737",
   storageBucket: "satu-sop-3b737.firebasestorage.app",
   messagingSenderId: "613797693533",
   appId: "1:613797693533:web:57a324c1f8bf98e33d65b4"
-}
+};
 
 // ==========================================
 // MOCK DATA: DAFTAR SOP LAPAS
@@ -36,7 +27,7 @@ const MOCK_SOP_DATA = [
     date: "2024-01-15",
     version: "1.2",
     description: "Prosedur standar operasional dalam melaksanakan penggeledahan rutin maupun insidentil pada blok dan kamar hunian Warga Binaan Pemasyarakatan untuk mencegah gangguan keamanan dan ketertiban.",
-    icon: "Lock",
+    icon: Lock,
     updatedBy: "Sistem",
     history: [
       { version: "1.0", date: "2023-05-10", updatedBy: "Admin Lama", description: "Pembuatan SOP awal penggeledahan." },
@@ -50,7 +41,7 @@ const MOCK_SOP_DATA = [
     date: "2024-02-10",
     version: "2.0",
     description: "Tata cara pengeluaran, pengawalan, hingga pengembalian narapidana/tahanan yang akan mengikuti proses persidangan di Pengadilan.",
-    icon: "Gavel",
+    icon: Gavel,
     updatedBy: "Sistem",
     history: []
   },
@@ -61,7 +52,7 @@ const MOCK_SOP_DATA = [
     date: "2023-11-20",
     version: "3.1",
     description: "Alur kerja pengusulan pengurangan masa pidana (Remisi) bagi Narapidana dan Anak Pidana yang telah memenuhi syarat administratif dan substantif.",
-    icon: "BookOpen",
+    icon: BookOpen,
     updatedBy: "Sistem",
     history: []
   },
@@ -72,7 +63,7 @@ const MOCK_SOP_DATA = [
     date: "2024-03-05",
     version: "1.5",
     description: "Prosedur pengurusan dan pelaksanaan program Asimilasi di rumah bagi WBP sesuai dengan peraturan perundang-undangan yang berlaku.",
-    icon: "Users",
+    icon: Users,
     updatedBy: "Sistem",
     history: []
   },
@@ -83,7 +74,7 @@ const MOCK_SOP_DATA = [
     date: "2024-01-05",
     version: "2.2",
     description: "Standar pelayanan kesehatan tingkat pertama di Poliklinik Lapas bagi WBP yang mengalami keluhan sakit atau membutuhkan pemeriksaan rutin.",
-    icon: "Activity",
+    icon: Activity,
     updatedBy: "Sistem",
     history: []
   },
@@ -94,7 +85,7 @@ const MOCK_SOP_DATA = [
     date: "2023-12-10",
     version: "1.0",
     description: "Prosedur pengawasan penerimaan bahan makanan mentah dari pihak ketiga (Bama) hingga proses pengolahan dan distribusi ke kamar hunian.",
-    icon: "Scale",
+    icon: Scale,
     updatedBy: "Sistem",
     history: []
   },
@@ -105,7 +96,7 @@ const MOCK_SOP_DATA = [
     date: "2024-04-01",
     version: "4.0",
     description: "Langkah-langkah registrasi, pemeriksaan berkas, pemeriksaan kesehatan awal, hingga penempatan kamar mapenaling bagi tahanan yang baru dikirim oleh pihak penahan.",
-    icon: "Briefcase",
+    icon: Briefcase,
     updatedBy: "Sistem",
     history: []
   },
@@ -116,7 +107,7 @@ const MOCK_SOP_DATA = [
     date: "2024-02-28",
     version: "3.0",
     description: "Tata tertib dan prosedur layanan kunjungan langsung bagi keluarga WBP, meliputi pendaftaran, pemeriksaan barang, hingga pelaksanaan kunjungan.",
-    icon: "Users",
+    icon: Users,
     updatedBy: "Sistem",
     history: []
   }
@@ -156,7 +147,6 @@ export default function App() {
   const [sops, setSops] = useState(MOCK_SOP_DATA);
   const [selectedSOP, setSelectedSOP] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [fbUser, setFbUser] = useState(null);
 
   // State Manajemen Admin (Auth)
   const [adminUser, setAdminUser] = useState(null);
@@ -202,40 +192,6 @@ export default function App() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
-
-  // FIREBASE AUTH & FETCH DATA
-  useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (e) { console.error("Firebase Auth Error:", e); }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setFbUser);
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!fbUser || !db) return;
-    const sopsRef = collection(db, 'artifacts', appId, 'public', 'data', 'sops');
-    const unsubscribe = onSnapshot(sopsRef, (snapshot) => {
-      const fetchedSops = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (fetchedSops.length > 0) {
-        setSops(fetchedSops);
-      } else {
-        // First time setup: populate Firestore with Mock Data
-        MOCK_SOP_DATA.forEach(mockSop => {
-          setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', mockSop.id), mockSop);
-        });
-      }
-    }, (error) => console.error("Firestore Error:", error));
-    return () => unsubscribe();
-  }, [fbUser]);
 
   useEffect(() => {
     if (isDarkMode) document.documentElement.classList.add('dark');
@@ -363,21 +319,14 @@ export default function App() {
     }
   };
 
-  const handleTogglePin = async (id, e) => {
+  const handleTogglePin = (id, e) => {
     e.stopPropagation();
-    const sop = sops.find(s => s.id === id);
-    if (!sop) return;
-    
-    if (db && fbUser) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id), { ...sop, isPinned: !sop.isPinned }, { merge: true });
-    } else {
-      setSops(prev => prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s));
-    }
+    setSops(prev => prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s));
     showToast("Status pin SOP berhasil diperbarui!");
   };
 
   // Handler Simpan / Edit SOP (Versioning & Audit Trail)
-  const handleSaveSop = async (e) => {
+  const handleSaveSop = (e) => {
     e.preventDefault();
     if (editingSop) {
       // Buat riwayat lama
@@ -385,41 +334,28 @@ export default function App() {
         version: editingSop.version,
         date: editingSop.date,
         updatedBy: editingSop.updatedBy,
-        description: editingSop.description
+        description: editingSop.description,
+        file: editingSop.file
       };
 
-      const updatedSop = {
-        ...editingSop,
-        ...formData,
+      setSops(sops.map(s => s.id === editingSop.id ? { 
+        ...s, 
+        ...formData, 
         updatedBy: adminUser.username,
-        history: [oldState, ...(editingSop.history || [])]
-      };
-      delete updatedSop.file; // Menghindari error serialisasi pada firebase
-
-      if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', updatedSop.id), updatedSop);
-      } else {
-        setSops(sops.map(s => s.id === editingSop.id ? updatedSop : s));
-      }
+        history: [oldState, ...(s.history || [])] // Push to history
+      } : s));
       showToast("Data SOP & Riwayat Revisi berhasil diperbarui!");
     } else {
       // SOP Baru
-      const newId = `SOP-${formData.category.substring(0,3).toUpperCase()}-${Math.floor(Math.random()*100)}`;
       const newSop = { 
         ...formData, 
-        id: newId, 
-        icon: "FileText",
+        id: `SOP-${formData.category.substring(0,3).toUpperCase()}-${Math.floor(Math.random()*100)}`, 
+        icon: FileText,
         updatedBy: adminUser.username,
         history: [],
         isPinned: false
       };
-      delete newSop.file; // Menghindari error serialisasi pada firebase
-
-      if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', newId), newSop);
-      } else {
-        setSops([newSop, ...sops]);
-      }
+      setSops([newSop, ...sops]);
       showToast("SOP Baru berhasil diupload!");
     }
     setShowSopForm(false);
@@ -430,12 +366,8 @@ export default function App() {
     setConfirmDialog({
       isOpen: true,
       message: "Apakah Anda yakin ingin menghapus SOP ini dari direktori secara permanen?",
-      onConfirm: async () => {
-        if (db && fbUser) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id));
-        } else {
-          setSops(prev => prev.filter(s => s.id !== id));
-        }
+      onConfirm: () => {
+        setSops(prev => prev.filter(s => s.id !== id));
         showToast("Dokumen SOP berhasil dihapus!");
       }
     });
