@@ -55,13 +55,12 @@ const MOCK_SOP_DATA = [
     title: "SOP Penggeledahan Kamar Hunian",
     category: "Keamanan",
     date: "2024-01-15",
-    version: "1.2",
     description: "Prosedur standar operasional dalam melaksanakan penggeledahan rutin maupun insidentil pada blok dan kamar hunian Warga Binaan Pemasyarakatan untuk mencegah gangguan keamanan dan ketertiban.",
     icon: "Lock",
     updatedBy: "Sistem",
     history: [
-      { version: "1.0", date: "2023-05-10", updatedBy: "Admin Lama", description: "Pembuatan SOP awal penggeledahan." },
-      { version: "1.1", date: "2023-10-20", updatedBy: "Sistem", description: "Pembaruan aturan penggeledahan insidentil." }
+      { date: "2023-05-10", updatedBy: "Admin Lama", description: "Pembuatan SOP awal penggeledahan." },
+      { date: "2023-10-20", updatedBy: "Sistem", description: "Pembaruan aturan penggeledahan insidentil." }
     ]
   },
   {
@@ -69,7 +68,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Pengawalan Narapidana Sidang",
     category: "Keamanan",
     date: "2024-02-10",
-    version: "2.0",
     description: "Tata cara pengeluaran, pengawalan, hingga pengembalian narapidana/tahanan yang akan mengikuti proses persidangan di Pengadilan.",
     icon: "Gavel",
     updatedBy: "Sistem",
@@ -80,7 +78,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Pengusulan Remisi",
     category: "Pembinaan",
     date: "2023-11-20",
-    version: "3.1",
     description: "Alur kerja pengusulan pengurangan masa pidana (Remisi) bagi Narapidana dan Anak Pidana yang telah memenuhi syarat administratif dan substantif.",
     icon: "BookOpen",
     updatedBy: "Sistem",
@@ -91,7 +88,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Pelaksanaan Asimilasi",
     category: "Pembinaan",
     date: "2024-03-05",
-    version: "1.5",
     description: "Prosedur pengurusan dan pelaksanaan program Asimilasi di rumah bagi WBP sesuai dengan peraturan perundang-undangan yang berlaku.",
     icon: "Users",
     updatedBy: "Sistem",
@@ -102,7 +98,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Pelayanan Kesehatan Poliklinik",
     category: "Perawatan",
     date: "2024-01-05",
-    version: "2.2",
     description: "Standar pelayanan kesehatan tingkat pertama di Poliklinik Lapas bagi WBP yang mengalami keluhan sakit atau membutuhkan pemeriksaan rutin.",
     icon: "Activity",
     updatedBy: "Sistem",
@@ -113,7 +108,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Penerimaan dan Penyajian Bahan Makanan",
     category: "Perawatan",
     date: "2023-12-10",
-    version: "1.0",
     description: "Prosedur pengawasan penerimaan bahan makanan mentah dari pihak ketiga (Bama) hingga proses pengolahan dan distribusi ke kamar hunian.",
     icon: "Scale",
     updatedBy: "Sistem",
@@ -124,7 +118,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Penerimaan Tahanan Baru",
     category: "Tata Usaha",
     date: "2024-04-01",
-    version: "4.0",
     description: "Langkah-langkah registrasi, pemeriksaan berkas, pemeriksaan kesehatan awal, hingga penempatan kamar mapenaling bagi tahanan yang baru dikirim oleh pihak penahan.",
     icon: "Briefcase",
     updatedBy: "Sistem",
@@ -135,7 +128,6 @@ const MOCK_SOP_DATA = [
     title: "SOP Layanan Kunjungan Tatap Muka",
     category: "Tata Usaha",
     date: "2024-02-28",
-    version: "3.0",
     description: "Tata tertib dan prosedur layanan kunjungan langsung bagi keluarga WBP, meliputi pendaftaran, pemeriksaan barang, hingga pelaksanaan kunjungan.",
     icon: "Users",
     updatedBy: "Sistem",
@@ -175,9 +167,6 @@ const getDummyPdfBlob = () => {
   const byteArray = new Uint8Array(byteNumbers);
   return new Blob([byteArray], {type: 'application/pdf'});
 };
-
-// Cache lokal untuk menyimpan file asli selama sesi aktif agar dapat dilihat setelah upload
-const localFilesCache = {};
 
 // ==========================================
 // KOMPONEN UTAMA
@@ -220,7 +209,7 @@ export default function App() {
   const [showSopForm, setShowSopForm] = useState(false);
   const [editingSop, setEditingSop] = useState(null);
   const [formData, setFormData] = useState({
-    title: '', category: customCategories[0] || '', version: '1.0', description: '', date: new Date().toISOString().split('T')[0], file: null
+    title: '', category: customCategories[0] || '', description: '', date: new Date().toISOString().split('T')[0], file: null
   });
 
   // State Modal Konfirmasi Custom
@@ -356,11 +345,8 @@ export default function App() {
     showToast(`Mengunduh dokumen: ${sop.title}`);
     let fileUrl;
     
-    // Cek cache lokal terlebih dahulu, jika tidak ada baru gunakan file objek / dummy
-    const cachedFile = localFilesCache[sop.id] || sop.file;
-    
-    if (cachedFile instanceof File) {
-      fileUrl = URL.createObjectURL(cachedFile);
+    if (sop.file instanceof File) {
+      fileUrl = URL.createObjectURL(sop.file);
     } else {
       fileUrl = URL.createObjectURL(getDummyPdfBlob());
     }
@@ -379,11 +365,8 @@ export default function App() {
   const handleView = (sop) => {
     let fileUrl;
     
-    // Cek cache lokal terlebih dahulu
-    const cachedFile = localFilesCache[sop.id] || sop.file;
-    
-    if (cachedFile instanceof File) {
-      fileUrl = URL.createObjectURL(cachedFile);
+    if (sop.file instanceof File) {
+      fileUrl = URL.createObjectURL(sop.file);
     } else {
       fileUrl = URL.createObjectURL(getDummyPdfBlob());
     }
@@ -424,7 +407,6 @@ export default function App() {
     if (editingSop) {
       // Buat riwayat lama
       const oldState = {
-        version: editingSop.version,
         date: editingSop.date,
         updatedBy: editingSop.updatedBy,
         description: editingSop.description
@@ -436,11 +418,6 @@ export default function App() {
         updatedBy: adminUser.username,
         history: [oldState, ...(editingSop.history || [])]
       };
-      
-      // Simpan file ke cache lokal sebelum propertinya dihapus
-      if (formData.file) {
-         localFilesCache[updatedSop.id] = formData.file;
-      }
       
       delete updatedSop.file; // Menghindari error serialisasi pada firebase
 
@@ -461,11 +438,6 @@ export default function App() {
         history: [],
         isPinned: false
       };
-      
-      // Simpan file ke cache lokal sebelum propertinya dihapus
-      if (formData.file) {
-         localFilesCache[newId] = formData.file;
-      }
 
       delete newSop.file; // Menghindari error serialisasi pada firebase
 
@@ -744,7 +716,7 @@ export default function App() {
               <button 
                 onClick={() => { 
                   setEditingSop(null); 
-                  setFormData({ title: '', category: customCategories[0] || '', version: '1.0', description: '', date: new Date().toISOString().split('T')[0], file: null }); 
+                  setFormData({ title: '', category: customCategories[0] || '', description: '', date: new Date().toISOString().split('T')[0], file: null }); 
                   setShowSopForm(true); 
                 }} 
                 className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest btn-3d flex items-center gap-3 shadow-emerald-600/30"
@@ -795,9 +767,6 @@ export default function App() {
                       }
                       return null;
                     })()}
-                    <span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[9px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700">
-                      v{sop.version}
-                    </span>
                   </div>
                   
                   <div className="flex-1">
@@ -943,11 +912,7 @@ export default function App() {
                       {selectedSOP.description}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                      <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Versi Dokumen</p>
-                      <p className="text-lg font-black text-slate-900 dark:text-white">v{selectedSOP.version}</p>
-                    </div>
+                  <div className="grid grid-cols-1 gap-4">
                     <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
                       <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Terakhir Diperbarui</p>
                       <p className="text-sm mt-1 font-black text-slate-900 dark:text-white">{formatDateIndo(selectedSOP.date)}</p>
@@ -964,7 +929,7 @@ export default function App() {
                        <span className="absolute -left-[31px] top-1 w-4 h-4 bg-emerald-500 rounded-full border-4 border-white dark:border-slate-900 shadow-sm"></span>
                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800/50">
                          <div className="flex justify-between items-start mb-2">
-                           <span className="px-2 py-1 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Versi Saat Ini (v{selectedSOP.version})</span>
+                           <span className="px-2 py-1 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Status Saat Ini</span>
                            <span className="text-[10px] font-bold text-slate-500">{formatDateIndo(selectedSOP.date)}</span>
                          </div>
                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-2">Pembaruan oleh: <span className="font-bold text-slate-900 dark:text-white">{selectedSOP.updatedBy}</span></p>
@@ -978,7 +943,7 @@ export default function App() {
                            <span className="absolute -left-[31px] top-1 w-4 h-4 bg-slate-300 dark:bg-slate-600 rounded-full border-4 border-white dark:border-slate-900 shadow-sm"></span>
                            <div className="bg-white/60 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
                              <div className="flex justify-between items-start mb-2">
-                               <span className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400">Versi v{hist.version}</span>
+                               <span className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400">Riwayat Pembaruan</span>
                                <span className="text-[10px] font-bold text-slate-500">{formatDateIndo(hist.date)}</span>
                              </div>
                              <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Dikelola oleh: {hist.updatedBy}</p>
@@ -1039,19 +1004,13 @@ export default function App() {
                   <input type="text" value={formData.title} onChange={e=>setFormData({...formData, title: e.target.value})} placeholder="Contoh: SOP Penggeledahan..." className="w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" required />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Kategori</label>
-                    <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold uppercase outline-none appearance-none cursor-pointer transition-all text-slate-900 dark:text-white" required>
-                      {customCategories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Versi / Revisi (Pembaruan)</label>
-                    <input type="text" value={formData.version} onChange={e=>setFormData({...formData, version: e.target.value})} placeholder="Contoh: 1.0" className="w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" required />
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Kategori</label>
+                  <select value={formData.category} onChange={e=>setFormData({...formData, category: e.target.value})} className="w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold uppercase outline-none appearance-none cursor-pointer transition-all text-slate-900 dark:text-white" required>
+                    {customCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
