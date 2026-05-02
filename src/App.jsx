@@ -4,7 +4,8 @@ import {
   FileText, Download, CheckCircle2, AlertCircle, X,
   ChevronRight, FileDown, BookOpen, Lock, Users, Activity,
   Briefcase, Gavel, Scale, Plus, Edit, Trash2, Upload, Eye, EyeOff,
-  LogOut, ArrowUpDown, ListOrdered, BarChart3, History, User, Settings, Pin
+  LogOut, ArrowUpDown, ListOrdered, BarChart3, History, User, Settings, Pin,
+  Smartphone, Monitor
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -20,6 +21,7 @@ import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'fi
 // CATATAN: Pastikan Anda juga mengaktifkan "Anonymous" di menu Authentication > Sign-in method
 // =====================================================================
 const CUSTOM_FIREBASE_CONFIG = {
+  // Hapus tanda garis miring ganda (//) di bawah ini dan masukkan data Anda:
   apiKey: "AIzaSyCQ4sey3h0wOjv0tNBRZpccA45uoThtPnY",
   authDomain: "satu-sop-3b737.firebaseapp.com",
   projectId: "satu-sop-3b737",
@@ -163,11 +165,26 @@ const getBadgeInfo = (dateStr, history) => {
   return null;
 };
 
+const getDummyPdfBlob = () => {
+  // Struktur PDF kosong yang valid dan di-encode dengan Base64 agar tidak error saat dirender
+  const byteCharacters = atob("JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qo5ypUMFAwALJMLU31jBQsTAz1LBSK0osSQ0IygRyQnJwUBQslAwOQvB5IAgBRGgq/CmVuZHN0cmVhbQplbmRvYmoKCjMgMCBvYmoKNDIKZW5kb2JqCgo0IDAgb2JqCjw8L1R5cGUvUGFnZS9NZWRpYUJveFswIDAgNTk1IDg0Ml0vUmVzb3VyY2VzPDwvRm9udDw8L0YxIDEgMCBSPj4+Pi9Db250ZW50cyAyIDAgUi9QYXJlbnQgNSAwIFI+PgplbmRvYmoKCjEgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCgo1IDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1s0IDAgUl0vQ291bnQgMT4+CmVuZG9iagoKNiAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgNSAwIFI+PgplbmRvYmoKCjcgMCBvYmoKPDwvUHJvZHVjZXIoZ2F1c2gudmVydGljYWxjb3JwLmNvbSkvQ3JlYXRpb25EYXRlKEQ6MjAwNjAzMDIxNTQ2NDYrMDEnMDAnKT4+CmVuZG9iagoKeHJlZgowIDgKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMjQ1IDAwMDAwIG4gCjAwMDAwMDAwMTcgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMTMzIDAwMDAwIG4gCjAwMDAwMDAzMzMgMDAwMDAgbiAKMDAwMDAwMDM5MCAwMDAwMCBuIAowMDAwMDAwNDM5IDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA4L1Jvb3QgNiAwIFIvSW5mbyA3IDAgUj4+CnN0YXJ0eHJlZgo1NDIKJSVFT0YK");
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
+  }
+  const byteArray = new Uint8Array(byteNumbers);
+  return new Blob([byteArray], {type: 'application/pdf'});
+};
+
+// Cache lokal untuk menyimpan file asli selama sesi aktif agar dapat dilihat setelah upload
+const localFilesCache = {};
+
 // ==========================================
 // KOMPONEN UTAMA
 // ==========================================
 export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('darkMode') !== 'false');
+  const [isMobileView, setIsMobileView] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [toast, setToast] = useState(null);
   
@@ -338,11 +355,14 @@ export default function App() {
   const handleDownload = (sop) => {
     showToast(`Mengunduh dokumen: ${sop.title}`);
     let fileUrl;
-    if (sop.file instanceof File) {
-      fileUrl = URL.createObjectURL(sop.file);
+    
+    // Cek cache lokal terlebih dahulu, jika tidak ada baru gunakan file objek / dummy
+    const cachedFile = localFilesCache[sop.id] || sop.file;
+    
+    if (cachedFile instanceof File) {
+      fileUrl = URL.createObjectURL(cachedFile);
     } else {
-      const blob = new Blob([`%PDF-1.4\n%File PDF Dummy untuk ${sop.title}\n`], { type: 'application/pdf' });
-      fileUrl = URL.createObjectURL(blob);
+      fileUrl = URL.createObjectURL(getDummyPdfBlob());
     }
 
     const link = document.createElement('a');
@@ -358,11 +378,14 @@ export default function App() {
 
   const handleView = (sop) => {
     let fileUrl;
-    if (sop.file instanceof File) {
-      fileUrl = URL.createObjectURL(sop.file);
+    
+    // Cek cache lokal terlebih dahulu
+    const cachedFile = localFilesCache[sop.id] || sop.file;
+    
+    if (cachedFile instanceof File) {
+      fileUrl = URL.createObjectURL(cachedFile);
     } else {
-      const blob = new Blob([`%PDF-1.4\n%File PDF Dummy untuk ${sop.title}\n`], { type: 'application/pdf' });
-      fileUrl = URL.createObjectURL(blob);
+      fileUrl = URL.createObjectURL(getDummyPdfBlob());
     }
     window.open(fileUrl, '_blank');
   };
@@ -413,6 +436,12 @@ export default function App() {
         updatedBy: adminUser.username,
         history: [oldState, ...(editingSop.history || [])]
       };
+      
+      // Simpan file ke cache lokal sebelum propertinya dihapus
+      if (formData.file) {
+         localFilesCache[updatedSop.id] = formData.file;
+      }
+      
       delete updatedSop.file; // Menghindari error serialisasi pada firebase
 
       if (db && fbUser) {
@@ -432,6 +461,12 @@ export default function App() {
         history: [],
         isPinned: false
       };
+      
+      // Simpan file ke cache lokal sebelum propertinya dihapus
+      if (formData.file) {
+         localFilesCache[newId] = formData.file;
+      }
+
       delete newSop.file; // Menghindari error serialisasi pada firebase
 
       if (db && fbUser) {
@@ -461,7 +496,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b1120] text-slate-950 dark:text-slate-100 transition-colors duration-500 font-sans selection:bg-emerald-500/30 overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b1120] text-slate-950 dark:text-slate-100 transition-colors duration-500 font-sans selection:bg-emerald-500/30 overflow-x-hidden relative flex justify-center">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;400;600;800&display=swap');
         * { font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -552,7 +587,7 @@ export default function App() {
       )}
 
       {/* HEADER GLOBAL */}
-      <header className="fixed top-0 left-0 right-0 z-50 px-6 py-4 flex justify-between items-center pointer-events-none transition-all">
+      <header className={`fixed top-0 left-1/2 -translate-x-1/2 z-50 px-6 py-4 flex justify-between items-center pointer-events-none transition-all duration-500 w-full ${isMobileView ? 'max-w-[480px]' : 'max-w-full'}`}>
         <div className="glass-card px-5 py-3 rounded-2xl pointer-events-auto flex items-center gap-3 shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center gap-1">
             {isAdmin && (
@@ -566,19 +601,24 @@ export default function App() {
           </div>
           <span className="font-black tracking-tighter text-[15px] bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-blue-600 dark:from-emerald-400 dark:to-blue-400">SATU SOP</span>
         </div>
-        <div className="flex gap-3 pointer-events-auto items-center">
-          <div className="hidden sm:flex items-center gap-2 px-4 py-2.5 glass-card rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mr-2 shadow-sm">
+        <div className="flex gap-2 pointer-events-auto items-center">
+          <div className={`${isMobileView ? 'hidden' : 'hidden sm:flex'} items-center gap-2 px-4 py-2.5 glass-card rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 shadow-sm`}>
             <Clock size={14} className="text-blue-500" />
             {formatLiveTime(currentTime)}
           </div>
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3.5 glass-card rounded-2xl hover:scale-105 hover:shadow-lg transition-all text-slate-600 dark:text-slate-300 border border-transparent hover:border-slate-300 dark:hover:border-slate-700">
+          
+          <button onClick={() => setIsMobileView(!isMobileView)} className="p-3.5 glass-card rounded-2xl hover:scale-105 hover:shadow-lg transition-all text-slate-600 dark:text-slate-300 border border-transparent hover:border-slate-300 dark:hover:border-slate-700" title={isMobileView ? "Beralih ke Mode Desktop" : "Beralih ke Mode Mobile"}>
+            {isMobileView ? <Monitor size={18} className="text-blue-500"/> : <Smartphone size={18} className="text-emerald-500"/>}
+          </button>
+          
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-3.5 glass-card rounded-2xl hover:scale-105 hover:shadow-lg transition-all text-slate-600 dark:text-slate-300 border border-transparent hover:border-slate-300 dark:hover:border-slate-700" title={isDarkMode ? "Beralih Mode Terang" : "Beralih Mode Gelap"}>
             {isDarkMode ? <Sun size={18} className="text-amber-400"/> : <Moon size={18} className="text-indigo-600"/>}
           </button>
         </div>
       </header>
 
       {/* KONTEN UTAMA */}
-      <main className="pt-32 pb-20 px-6 max-w-7xl mx-auto relative z-10 min-h-screen flex flex-col">
+      <main className={`pt-32 pb-20 px-6 mx-auto relative z-10 min-h-screen flex flex-col transition-all duration-500 w-full ${isMobileView ? 'max-w-[480px]' : 'max-w-7xl'}`}>
         
         {/* HERO SECTION */}
         <div className="text-center mb-16 animate-in slide-in-from-bottom-8 duration-700">
@@ -586,20 +626,20 @@ export default function App() {
             <div className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></div>
             Dokumen Resmi Terpadu
           </div>
-          <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[1.1] text-slate-900 dark:text-white mb-4">
+          <h1 className={`font-black tracking-tighter leading-[1.1] text-slate-900 dark:text-white mb-4 transition-all duration-500 ${isMobileView ? 'text-4xl' : 'text-5xl md:text-7xl'}`}>
             SATU SOP
           </h1>
-          <h2 className="text-sm md:text-lg font-black tracking-widest text-emerald-600 dark:text-emerald-400 mb-6 uppercase">
+          <h2 className={`font-black tracking-widest text-emerald-600 dark:text-emerald-400 mb-6 uppercase transition-all duration-500 ${isMobileView ? 'text-xs' : 'text-sm md:text-lg'}`}>
             Sistem Akses Terpadu untuk Standar Operasional Prosedur
           </h2>
-          <p className="max-w-2xl mx-auto text-sm md:text-base font-semibold text-slate-600 dark:text-slate-400 leading-relaxed mb-10">
+          <p className={`max-w-2xl mx-auto font-semibold text-slate-600 dark:text-slate-400 leading-relaxed mb-10 transition-all duration-500 ${isMobileView ? 'text-xs' : 'text-sm md:text-base'}`}>
             Pusat informasi dan dokumentasi seluruh pedoman kerja (SOP) yang berlaku di lingkungan Lembaga Pemasyarakatan Kelas IIB Kalabahi.
           </p>
 
           {/* DASHBOARD STATISTIK */}
           <div className="max-w-4xl mx-auto mb-10 animate-in fade-in zoom-in duration-500">
             <div className="glass-card p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-emerald-500/20 relative overflow-hidden">
-              <div className="flex flex-col md:flex-row gap-8 items-center relative z-10">
+              <div className={`flex gap-8 items-center relative z-10 ${isMobileView ? 'flex-col' : 'flex-col md:flex-row'}`}>
                 {/* Total Stat */}
                 <div className="text-center md:text-left md:pr-8 md:border-r border-slate-200 dark:border-slate-800 shrink-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Total Keseluruhan</p>
@@ -613,7 +653,7 @@ export default function App() {
                   </div>
                   
                   {/* Category Breakdown (Mini Bar Chart) */}
-                  <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[160px] overflow-y-auto pr-2">
+                  <div className={`flex-1 w-full grid gap-3 max-h-[160px] overflow-y-auto pr-2 ${isMobileView ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                     {customCategories.map((cat, i) => {
                       const count = sops.filter(s => s.category === cat).length;
                       const percentage = sops.length > 0 ? Math.round((count / sops.length) * 100) : 0;
@@ -654,7 +694,7 @@ export default function App() {
             </div>
 
           {/* SEARCH, FILTER & SORTING BAR */}
-          <div className="max-w-4xl mx-auto glass-card p-4 rounded-[2rem] flex flex-col md:flex-row gap-4 shadow-xl border border-white/40 dark:border-slate-700/50">
+          <div className={`max-w-4xl mx-auto glass-card p-4 rounded-[2rem] flex gap-4 shadow-xl border border-white/40 dark:border-slate-700/50 ${isMobileView ? 'flex-col' : 'flex-col md:flex-row'}`}>
             <div className="relative flex-1">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input 
@@ -666,8 +706,8 @@ export default function App() {
               />
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative sm:w-40 shrink-0">
+            <div className={`flex gap-4 ${isMobileView ? 'flex-col' : 'flex-col sm:flex-row'}`}>
+              <div className={`relative shrink-0 ${isMobileView ? 'w-full' : 'sm:w-40'}`}>
                  <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                  <select 
                    value={selectedCategory}
@@ -681,7 +721,7 @@ export default function App() {
                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none rotate-90" size={14}/>
               </div>
 
-              <div className="relative sm:w-40 shrink-0">
+              <div className={`relative shrink-0 ${isMobileView ? 'w-full' : 'sm:w-40'}`}>
                  <ArrowUpDown className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                  <select 
                    value={sortBy}
@@ -723,7 +763,7 @@ export default function App() {
             <p className="text-sm font-bold text-slate-500">Coba gunakan kata kunci atau filter yang berbeda.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-12 duration-1000 delay-150 mb-10">
+          <div className={`grid gap-6 animate-in slide-in-from-bottom-12 duration-1000 delay-150 mb-10 ${isMobileView ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
             {paginatedSOPs.map((sop, idx) => {
               return (
                 <div 
@@ -791,7 +831,7 @@ export default function App() {
 
         {/* PAGINATION CONTROLS */}
         {filteredAndSortedSOPs.length > 0 && (
-          <div className="mt-auto pt-6 flex flex-col sm:flex-row justify-between items-center gap-4 glass-card p-4 rounded-[2rem]">
+          <div className={`mt-auto pt-6 flex justify-between items-center gap-4 glass-card p-4 rounded-[2rem] ${isMobileView ? 'flex-col' : 'flex-col sm:flex-row'}`}>
              <div className="flex items-center gap-3">
                <ListOrdered size={18} className="text-slate-400"/>
                <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Tampilkan:</span>
