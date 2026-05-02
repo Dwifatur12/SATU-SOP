@@ -22,7 +22,6 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 // CATATAN: Pastikan Anda juga mengaktifkan "Anonymous" di menu Authentication > Sign-in method
 // =====================================================================
 const CUSTOM_FIREBASE_CONFIG = {
-  // Hapus tanda garis miring ganda (//) di bawah ini dan masukkan data Anda:
   apiKey: "AIzaSyCQ4sey3h0wOjv0tNBRZpccA45uoThtPnY",
   authDomain: "satu-sop-3b737.firebaseapp.com",
   projectId: "satu-sop-3b737",
@@ -874,15 +873,19 @@ export default function App() {
 
                   <div className="pt-5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between mt-auto">
                     <div className="text-[10px] font-bold text-slate-500 flex flex-col gap-1">
-                      <span className="flex items-center gap-1.5"><Clock size={12}/> {formatDateIndo(sop.date)}</span>
-                      {isAdmin && <span className="flex items-center gap-1.5 text-blue-500"><User size={12}/> {sop.updatedBy}</span>}
+                      {isAdmin && (
+                        <>
+                          <span className="flex items-center gap-1.5"><Clock size={12}/> {formatDateIndo(sop.date)}</span>
+                          <span className="flex items-center gap-1.5 text-blue-500"><User size={12}/> {sop.updatedBy}</span>
+                        </>
+                      )}
                     </div>
                     <button 
                       onClick={() => { setSelectedSOP(sop); setShowHistory(false); }}
-                      className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm text-xs font-black uppercase tracking-widest"
                       title="Lihat Detail"
                     >
-                      <ChevronRight size={18} />
+                      Buka <ChevronRight size={16} />
                     </button>
                   </div>
                 </div>
@@ -990,9 +993,11 @@ export default function App() {
             {/* Modal Body with TABS */}
             <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 shrink-0 px-8 pt-4">
                <button onClick={()=>setShowHistory(false)} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${!showHistory ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Informasi Dokumen</button>
-               <button onClick={()=>setShowHistory(true)} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${showHistory ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
-                 Jejak Audit & Revisi {selectedSOP.history && selectedSOP.history.length > 0 && <span className="bg-amber-500 text-white px-1.5 rounded-full text-[9px]">{selectedSOP.history.length}</span>}
-               </button>
+               {isAdmin && (
+                 <button onClick={()=>setShowHistory(true)} className={`pb-3 px-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all flex items-center gap-2 ${showHistory ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                   Jejak Audit & Revisi {selectedSOP.history && selectedSOP.history.length > 0 && <span className="bg-amber-500 text-white px-1.5 rounded-full text-[9px]">{selectedSOP.history.length}</span>}
+                 </button>
+               )}
             </div>
 
             <div className="p-8 overflow-y-auto bg-white/30 dark:bg-slate-900/30 flex-1">
@@ -1005,13 +1010,15 @@ export default function App() {
                       {selectedSOP.description}
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                      <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Terakhir Diperbarui</p>
-                      <p className="text-sm mt-1 font-black text-slate-900 dark:text-white">{formatDateIndo(selectedSOP.date)}</p>
-                      <p className="text-[10px] mt-1 font-bold text-blue-500">Oleh: {selectedSOP.updatedBy}</p>
+                  {isAdmin && (
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Terakhir Diperbarui</p>
+                        <p className="text-sm mt-1 font-black text-slate-900 dark:text-white">{formatDateIndo(selectedSOP.date)}</p>
+                        <p className="text-[10px] mt-1 font-bold text-blue-500">Oleh: {selectedSOP.updatedBy}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </>
               ) : (
                 // TAB 2: JEJAK AUDIT & RIWAYAT REVISI
