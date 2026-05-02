@@ -10,6 +10,7 @@ import {
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ==========================================
 // FIREBASE SETUP
@@ -30,7 +31,15 @@ const CUSTOM_FIREBASE_CONFIG = {
   appId: "1:613797693533:web:57a324c1f8bf98e33d65b4"
 };
 
-let app, auth, db, appId = 'default-app-id';
+// ==========================================
+// KONFIGURASI MODE PENYIMPANAN
+// ==========================================
+// Ubah menjadi 'true' jika Anda sudah memasukkan konfigurasi Firebase Anda sendiri di atas
+// dan telah mengaktifkan Firebase Storage.
+// Jika 'false', file PDF akan disimpan ke Firestore Database sebagai teks Base64 (tanpa error).
+const USE_FIREBASE_STORAGE = false;
+
+let app, auth, db, storage, appId = 'default-app-id';
 try {
   // Sistem akan memprioritaskan konfigurasi Anda jika apiKey diisi
   const firebaseConfig = CUSTOM_FIREBASE_CONFIG.apiKey 
@@ -40,6 +49,7 @@ try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 } catch (err) {
   console.warn("Firebase not configured in environment.", err);
@@ -158,7 +168,6 @@ const getBadgeInfo = (dateStr, history) => {
 };
 
 const getDummyPdfBlob = () => {
-  // Struktur PDF kosong yang valid dan di-encode dengan Base64 agar tidak error saat dirender
   const byteCharacters = atob("JVBERi0xLjQKJcOkw7zDtsOfCjIgMCBvYmoKPDwvTGVuZ3RoIDMgMCBSL0ZpbHRlci9GbGF0ZURlY29kZT4+CnN0cmVhbQp4nDPQM1Qo5ypUMFAwALJMLU31jBQsTAz1LBSK0osSQ0IygRyQnJwUBQslAwOQvB5IAgBRGgq/CmVuZHN0cmVhbQplbmRvYmoKCjMgMCBvYmoKNDIKZW5kb2JqCgo0IDAgb2JqCjw8L1R5cGUvUGFnZS9NZWRpYUJveFswIDAgNTk1IDg0Ml0vUmVzb3VyY2VzPDwvRm9udDw8L0YxIDEgMCBSPj4+Pi9Db250ZW50cyAyIDAgUi9QYXJlbnQgNSAwIFI+PgplbmRvYmoKCjEgMCBvYmoKPDwvVHlwZS9Gb250L1N1YnR5cGUvVHlwZTEvQmFzZUZvbnQvSGVsdmV0aWNhPj4KZW5kb2JqCgo1IDAgb2JqCjw8L1R5cGUvUGFnZXMvS2lkc1s0IDAgUl0vQ291bnQgMT4+CmVuZG9iagoKNiAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgNSAwIFI+PgplbmRvYmoKCjcgMCBvYmoKPDwvUHJvZHVjZXIoZ2F1c2gudmVydGljYWxjb3JwLmNvbSkvQ3JlYXRpb25EYXRlKEQ6MjAwNjAzMDIxNTQ2NDYrMDEnMDAnKT4+CmVuZG9iagoKeHJlZgowIDgKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMjQ1IDAwMDAwIG4gCjAwMDAwMDAwMTcgMDAwMDAgbiAKMDAwMDAwMDExMiAwMDAwMCBuIAowMDAwMDAwMTMzIDAwMDAwIG4gCjAwMDAwMDAzMzMgMDAwMDAgbiAKMDAwMDAwMDM5MCAwMDAwMCBuIAowMDAwMDAwNDM5IDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA4L1Jvb3QgNiAwIFIvSW5mbyA3IDAgUj4+CnN0YXJ0eHJlZgo1NDIKJSVFT0YK");
   const byteNumbers = new Array(byteCharacters.length);
   for (let i = 0; i < byteCharacters.length; i++) {
@@ -341,45 +350,85 @@ export default function App() {
     setShowLogoutConfirm(true);
   };
 
+  // Fungsi untuk mengunduh dokumen (dari Storage URL atau Firestore Base64)
   const handleDownload = (sop) => {
     showToast(`Mengunduh dokumen: ${sop.title}`);
-    let fileUrl;
     
-    if (sop.file instanceof File) {
-      fileUrl = URL.createObjectURL(sop.file);
+    if (sop.fileUrl) {
+      // Mengunduh via URL Firebase Storage
+      const link = document.createElement('a');
+      link.href = sop.fileUrl;
+      link.target = '_blank';
+      link.download = `${sop.id}_${sop.title.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (sop.fileData) {
+      // Mengunduh via data Base64 Firestore
+      const link = document.createElement('a');
+      link.href = sop.fileData;
+      link.download = `${sop.id}_${sop.title.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } else {
-      fileUrl = URL.createObjectURL(getDummyPdfBlob());
+      // Tidak ada dokumen asli yang disematkan
+      const fileUrl = URL.createObjectURL(getDummyPdfBlob());
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = `${sop.id}_DUMMY.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
     }
 
-    const link = document.createElement('a');
-    link.href = fileUrl;
-    link.download = `${sop.id}_${sop.title.replace(/\s+/g, '_')}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setTimeout(() => URL.revokeObjectURL(fileUrl), 1000);
     setTimeout(() => { setSelectedSOP(null); setShowHistory(false); }, 1000);
   };
 
+  // Fungsi untuk melihat dokumen (dari Storage URL atau Firestore Base64)
   const handleView = (sop) => {
-    let fileUrl;
-    
-    if (sop.file instanceof File) {
-      fileUrl = URL.createObjectURL(sop.file);
+    if (sop.fileUrl) {
+      // Buka URL Storage secara langsung
+      window.open(sop.fileUrl, '_blank');
+    } else if (sop.fileData) {
+      // Buka Data Base64 Firestore
+      fetch(sop.fileData)
+        .then(res => res.blob())
+        .then(blob => {
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+        });
     } else {
-      fileUrl = URL.createObjectURL(getDummyPdfBlob());
+      // Dummy HTML peringatan
+      const htmlContent = `
+        <html>
+          <head><title>${sop.title}</title></head>
+          <body style="font-family:sans-serif; padding: 40px; text-align:center; background:#f8fafc;">
+            <div style="max-width:500px; margin:0 auto; background:white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+              <h2 style="color:#0f172a; margin-bottom:15px;">${sop.title}</h2>
+              <p style="color:#64748b; font-size:15px; line-height:1.6;">
+                File PDF asli tidak ditemukan.<br/><br/>
+                Silakan hubungkan aplikasi ini dengan <b>Firebase Storage</b> pada pengaturan kode Anda untuk mengaktifkan fitur penyimpanan dan pratinjau dokumen secara penuh.
+              </p>
+            </div>
+          </body>
+        </html>
+      `;
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const fileUrl = URL.createObjectURL(blob);
+      window.open(fileUrl, '_blank');
     }
-    window.open(fileUrl, '_blank');
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validasi Ukuran File (Maksimal 5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+      // Validasi Ukuran File secara Dinamis (5MB untuk Storage, 700KB untuk Firestore)
+      const maxSize = USE_FIREBASE_STORAGE ? 5 * 1024 * 1024 : 700 * 1024;
+      
       if (file.size > maxSize) {
-        showToast("Gagal! Ukuran file maksimal adalah 5MB.", "error");
+        showToast(`Gagal! Karena menggunakan ${USE_FIREBASE_STORAGE ? 'Storage' : 'Firestore'}, ukuran maksimal file adalah ${USE_FIREBASE_STORAGE ? '5MB' : '700KB'}.`, "error");
         e.target.value = null; // reset input
         setFormData({ ...formData, file: null });
       } else {
@@ -404,8 +453,49 @@ export default function App() {
   // Handler Simpan / Edit SOP (Versioning & Audit Trail)
   const handleSaveSop = async (e) => {
     e.preventDefault();
+    
+    showToast("Sedang memproses dokumen...", "success");
+
+    // Ambil ID SOP (baik sedang merevisi maupun buat baru)
+    const sopId = editingSop ? editingSop.id : `SOP-${formData.category.substring(0,3).toUpperCase()}-${Math.floor(Math.random()*100)}`;
+
+    let currentFileUrl = editingSop?.fileUrl || null;
+    let currentFileData = editingSop?.fileData || null;
+
+    // Proses File yang Diupload (Storage / Firestore)
+    if (formData.file) {
+      if (USE_FIREBASE_STORAGE && storage) {
+        // PENYIMPANAN MELALUI FIREBASE STORAGE (Harus dikonfigurasi oleh Anda)
+        try {
+          const fileRef = ref(storage, `sops/${sopId}_${Date.now()}.pdf`);
+          await uploadBytes(fileRef, formData.file);
+          currentFileUrl = await getDownloadURL(fileRef);
+          currentFileData = null; // Bersihkan data base64 jika menggunakan Storage
+        } catch(err) {
+          console.error("Upload error", err);
+          showToast("Gagal mengunggah file ke Storage.", "error");
+          return; // Hentikan proses jika upload Storage gagal
+        }
+      } else {
+        // PENYIMPANAN MELALUI FIRESTORE BASE64 (Cocok untuk Sandbox Test)
+        try {
+          currentFileData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+            reader.readAsDataURL(formData.file);
+          });
+          currentFileUrl = null; 
+        } catch (err) {
+          console.error("Base64 conversion error", err);
+          showToast("Gagal membaca file dokumen.", "error");
+          return;
+        }
+      }
+    }
+
     if (editingSop) {
-      // Buat riwayat lama
+      // UPDATE DATA REVISI
       const oldState = {
         date: editingSop.date,
         updatedBy: editingSop.updatedBy,
@@ -416,7 +506,9 @@ export default function App() {
         ...editingSop,
         ...formData,
         updatedBy: adminUser.username,
-        history: [oldState, ...(editingSop.history || [])]
+        history: [oldState, ...(editingSop.history || [])],
+        fileUrl: currentFileUrl,
+        fileData: currentFileData
       };
       
       delete updatedSop.file; // Menghindari error serialisasi pada firebase
@@ -428,21 +520,22 @@ export default function App() {
       }
       showToast("Data SOP & Riwayat Revisi berhasil diperbarui!");
     } else {
-      // SOP Baru
-      const newId = `SOP-${formData.category.substring(0,3).toUpperCase()}-${Math.floor(Math.random()*100)}`;
+      // SIMPAN DATA SOP BARU
       const newSop = { 
         ...formData, 
-        id: newId, 
+        id: sopId, 
         icon: "FileText",
         updatedBy: adminUser.username,
         history: [],
-        isPinned: false
+        isPinned: false,
+        fileUrl: currentFileUrl,
+        fileData: currentFileData
       };
 
       delete newSop.file; // Menghindari error serialisasi pada firebase
 
       if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', newId), newSop);
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', sopId), newSop);
       } else {
         setSops([newSop, ...sops]);
       }
@@ -1019,7 +1112,7 @@ export default function App() {
                     <input type="date" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} className="w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white dark:[color-scheme:dark]" required />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">File Dokumen (PDF) <span className="text-rose-500 lowercase font-medium tracking-normal">*Max 5MB</span></label>
+                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">File Dokumen (PDF) <span className="text-rose-500 lowercase font-medium tracking-normal">*Maks: {USE_FIREBASE_STORAGE ? '5MB' : '700KB'}</span></label>
                     <div className="relative">
                       <input type="file" accept=".pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
                       <div className={`w-full px-5 py-4 premium-input rounded-2xl text-xs font-bold transition-all flex items-center justify-between ${formData.file ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500 bg-emerald-50/50' : 'text-slate-500 dark:text-slate-400'}`}>
