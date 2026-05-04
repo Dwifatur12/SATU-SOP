@@ -22,6 +22,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 // CATATAN: Pastikan Anda juga mengaktifkan "Anonymous" di menu Authentication > Sign-in method
 // =====================================================================
 const CUSTOM_FIREBASE_CONFIG = {
+  // Hapus tanda garis miring ganda (//) di bawah ini dan masukkan data Anda:
   apiKey: "AIzaSyCQ4sey3h0wOjv0tNBRZpccA45uoThtPnY",
   authDomain: "satu-sop-3b737.firebaseapp.com",
   projectId: "satu-sop-3b737",
@@ -202,7 +203,15 @@ export default function App() {
   // State Pengaturan & Kategori
   const [adminCreds, setAdminCreds] = useState(() => {
     const saved = localStorage.getItem('satuSopAdminCreds');
-    return saved ? JSON.parse(saved) : { username: 'admin', password: 'password', recoveryWa: '6281234567890' };
+    return saved ? JSON.parse(saved) : { username: 'admin', password: 'password' };
+  });
+  const [superAdminCreds, setSuperAdminCreds] = useState(() => {
+    const saved = localStorage.getItem('satuSopSuperAdminCreds');
+    return saved ? JSON.parse(saved) : { username: 'lpkalabahi', password: 'pastiwbk123' };
+  });
+  const [autoLogoutMinutes, setAutoLogoutMinutes] = useState(() => {
+    const saved = localStorage.getItem('satuSopAutoLogout');
+    return saved ? parseInt(saved, 10) : 1;
   });
   const [customCategories, setCustomCategories] = useState(() => {
     const saved = localStorage.getItem('satuSopCategories');
@@ -210,7 +219,10 @@ export default function App() {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
+  const [showSuperSettingsPassword, setShowSuperSettingsPassword] = useState(false);
   const [settingsForm, setSettingsForm] = useState(adminCreds);
+  const [superSettingsForm, setSuperSettingsForm] = useState(superAdminCreds);
+  const [settingsAutoLogout, setSettingsAutoLogout] = useState(autoLogoutMinutes);
   const [newCategory, setNewCategory] = useState('');
 
   // State Form SOP
@@ -287,6 +299,43 @@ export default function App() {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, sortBy, itemsPerPage]);
 
+  // Fitur Auto-Logout: Dinamis berdasarkan pengaturan
+  useEffect(() => {
+    let timeoutId;
+
+    const handleActivity = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (isAdmin) {
+        timeoutId = setTimeout(() => {
+          // Aksi ketika waktu habis
+          setAdminUser(null);
+          setShowSopForm(false);
+          setShowSettings(false);
+          showToast(`Sesi otomatis berakhir karena tidak ada aktivitas selama ${autoLogoutMinutes} menit.`, 'error');
+        }, autoLogoutMinutes * 60000);
+      }
+    };
+
+    if (isAdmin) {
+      handleActivity(); // Mulai hitung waktu sejak pertama kali login
+      window.addEventListener('mousemove', handleActivity);
+      window.addEventListener('mousedown', handleActivity);
+      window.addEventListener('keypress', handleActivity);
+      window.addEventListener('touchstart', handleActivity);
+      window.addEventListener('scroll', handleActivity, true);
+    }
+
+    // Bersihkan pendengar event ketika admin logout atau komponen di-unmount
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('keypress', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('scroll', handleActivity, true);
+    };
+  }, [isAdmin, autoLogoutMinutes]);
+
   // Filter & Sort Logika
   const filteredAndSortedSOPs = useMemo(() => {
     // 1. Filter
@@ -329,20 +378,19 @@ export default function App() {
   // Fungsi Autentikasi
   const handleLogin = (e) => {
     e.preventDefault();
-    if (loginCreds.username === adminCreds.username && loginCreds.password === adminCreds.password) {
-      setAdminUser({ username: 'Administrator' });
+    if (loginCreds.username === superAdminCreds.username && loginCreds.password === superAdminCreds.password) {
+      setAdminUser({ username: 'Super Admin', role: 'superadmin' });
+      setShowLoginModal(false);
+      setLoginCreds({ username: '', password: '' });
+      showToast('Berhasil Login sebagai Super Admin!');
+    } else if (loginCreds.username === adminCreds.username && loginCreds.password === adminCreds.password) {
+      setAdminUser({ username: 'Administrator', role: 'admin' });
       setShowLoginModal(false);
       setLoginCreds({ username: '', password: '' });
       showToast('Berhasil Login sebagai Admin!');
     } else {
-      showToast('Username atau Password salah!', 'error');
+      showToast('Username atau Password yang Anda masukkan salah!', 'error');
     }
-  };
-
-  const handleLupaPassword = () => {
-    const text = `*PENGINGAT SISTEM SATU SOP*%0A%0AUsername: ${adminCreds.username}%0APassword: ${adminCreds.password}%0A%0ASimpan pesan ini sebagai pengingat akses Admin.`;
-    window.open(`https://wa.me/${adminCreds.recoveryWa}?text=${text}`, '_blank');
-    showToast('Membuka WhatsApp untuk mengirim pengingat...');
   };
 
   const handleLogout = () => {
@@ -644,7 +692,7 @@ export default function App() {
 
       {/* GLOBAL TOAST */}
       {toast && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[300] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-10 fade-in duration-300 backdrop-blur-md border ${toast.type === 'error' ? 'bg-rose-600/90 border-rose-500 text-white' : 'bg-emerald-600/90 border-emerald-500 text-white'}`}>
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-10 fade-in duration-300 backdrop-blur-md border ${toast.type === 'error' ? 'bg-rose-600/90 border-rose-500 text-white' : 'bg-emerald-600/90 border-emerald-500 text-white'}`}>
           {toast.type === 'error' ? <AlertCircle size={22}/> : <CheckCircle2 size={22}/>}
           <span className="text-xs font-bold uppercase tracking-widest text-white">{toast.message}</span>
         </div>
@@ -655,7 +703,7 @@ export default function App() {
         <div className="glass-card px-5 py-3 rounded-2xl pointer-events-auto flex items-center gap-3 shadow-lg hover:shadow-xl transition-shadow">
           <div className="flex items-center gap-1">
             {isAdmin && (
-              <button onClick={() => { setSettingsForm(adminCreds); setShowSettings(true); }} className="p-1.5 rounded-xl bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 transition-all" title="Pengaturan Sistem">
+              <button onClick={() => { setSettingsForm(adminCreds); setSuperSettingsForm(superAdminCreds); setSettingsAutoLogout(autoLogoutMinutes); setShowSettings(true); }} className="p-1.5 rounded-xl bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 transition-all" title="Pengaturan Sistem">
                 <Settings className="text-blue-600 dark:text-blue-500" size={20}/>
               </button>
             )}
@@ -697,7 +745,7 @@ export default function App() {
             Sistem Akses Terpadu untuk Standar Operasional Prosedur
           </h2>
           <p className={`max-w-2xl mx-auto font-semibold text-slate-600 dark:text-slate-400 leading-relaxed mb-10 transition-all duration-500 ${isMobileView ? 'text-xs' : 'text-sm md:text-base'}`}>
-            Pusat informasi dan dokumentasi seluruh pedoman kerja (SOP) yang berlaku di lingkungan Lembaga Pemasyarakatan Kelas IIB Kalabahi.
+            Pusat informasi seluruh Standar Operasional Prosedur (SOP) yang berlaku di lingkungan Lembaga Pemasyarakatan Kelas IIB Kalabahi.
           </p>
 
           {/* DASHBOARD STATISTIK */}
@@ -961,7 +1009,6 @@ export default function App() {
                 </div>
               </div>
               <button type="submit" className="w-full py-4 mt-2 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest btn-3d transition-colors">Masuk Sistem</button>
-              <button type="button" onClick={handleLupaPassword} className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-600 transition-colors">Lupa Password?</button>
             </form>
           </div>
         </div>
@@ -1183,37 +1230,67 @@ export default function App() {
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-slate-900 dark:text-white leading-tight">Pengaturan Sistem</h2>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Kelola Kredensial & Kategori</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-1">Kelola Pengaturan & Kategori</p>
                 </div>
               </div>
             </div>
 
             <div className="p-8 overflow-y-auto bg-white/30 dark:bg-slate-900/30 flex-1 space-y-8">
-              {/* Seksi Akun */}
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><Shield size={16}/> Akun Admin & Pemulihan</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Username Admin</label>
-                    <input type="text" value={settingsForm.username} onChange={e=>setSettingsForm({...settingsForm, username: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Password Admin</label>
-                    <div className="relative">
-                      <input type={showSettingsPassword ? "text" : "password"} value={settingsForm.password} onChange={e=>setSettingsForm({...settingsForm, password: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
-                      <button type="button" onClick={() => setShowSettingsPassword(!showSettingsPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition-colors p-1" title={showSettingsPassword ? "Sembunyikan Password" : "Tampilkan Password"}>
-                        {showSettingsPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
-                      </button>
+              {/* Seksi Akun (Hanya Super Admin) */}
+              {adminUser?.role === 'superadmin' && (
+                <>
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><Shield size={16}/> Akun Super Admin</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Username Super Admin</label>
+                        <input type="text" value={superSettingsForm.username} onChange={e=>setSuperSettingsForm({...superSettingsForm, username: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Password Super Admin</label>
+                        <div className="relative">
+                          <input type={showSuperSettingsPassword ? "text" : "password"} value={superSettingsForm.password} onChange={e=>setSuperSettingsForm({...superSettingsForm, password: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
+                          <button type="button" onClick={() => setShowSuperSettingsPassword(!showSuperSettingsPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition-colors p-1" title={showSuperSettingsPassword ? "Sembunyikan Password" : "Tampilkan Password"}>
+                            {showSuperSettingsPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Nomor WA Pemulihan (Format: 628...)</label>
-                    <input type="number" value={settingsForm.recoveryWa} onChange={e=>setSettingsForm({...settingsForm, recoveryWa: e.target.value})} placeholder="628..." className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
-                  </div>
-                </div>
-              </div>
+                  <hr className="border-slate-200 dark:border-slate-800"/>
 
-              <hr className="border-slate-200 dark:border-slate-800"/>
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><Clock size={16}/> Pengaturan Keamanan Sesi</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Waktu Auto-Logout (Menit)</label>
+                        <input type="number" min="1" value={settingsAutoLogout} onChange={e=>setSettingsAutoLogout(parseInt(e.target.value) || 1)} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
+                      </div>
+                    </div>
+                  </div>
+                  <hr className="border-slate-200 dark:border-slate-800"/>
+
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2"><User size={16}/> Akun Admin Biasa</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Username Admin</label>
+                        <input type="text" value={settingsForm.username} onChange={e=>setSettingsForm({...settingsForm, username: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-800 dark:text-slate-400 ml-1">Password Admin</label>
+                        <div className="relative">
+                          <input type={showSettingsPassword ? "text" : "password"} value={settingsForm.password} onChange={e=>setSettingsForm({...settingsForm, password: e.target.value})} className="w-full px-4 py-3 premium-input rounded-xl text-xs font-bold outline-none transition-all text-slate-900 dark:text-white" />
+                          <button type="button" onClick={() => setShowSettingsPassword(!showSettingsPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition-colors p-1" title={showSettingsPassword ? "Sembunyikan Password" : "Tampilkan Password"}>
+                            {showSettingsPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <hr className="border-slate-200 dark:border-slate-800"/>
+                </>
+              )}
 
               {/* Seksi Kategori */}
               <div>
@@ -1286,6 +1363,12 @@ export default function App() {
               <button onClick={() => {
                 setAdminCreds(settingsForm);
                 localStorage.setItem('satuSopAdminCreds', JSON.stringify(settingsForm));
+                if (adminUser?.role === 'superadmin') {
+                  setSuperAdminCreds(superSettingsForm);
+                  localStorage.setItem('satuSopSuperAdminCreds', JSON.stringify(superSettingsForm));
+                  setAutoLogoutMinutes(settingsAutoLogout);
+                  localStorage.setItem('satuSopAutoLogout', settingsAutoLogout.toString());
+                }
                 showToast('Pengaturan Akun Berhasil Disimpan!');
                 setShowSettings(false);
               }} className="flex-[2] py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[11px] tracking-widest btn-3d-blue flex items-center justify-center gap-2">
