@@ -5,7 +5,7 @@ import {
   ChevronRight, FileDown, BookOpen, Lock, Users, Activity,
   Briefcase, Gavel, Scale, Plus, Edit, Trash2, Upload, Eye, EyeOff,
   LogOut, ArrowUpDown, ListOrdered, BarChart3, History, User, Settings, Pin,
-  Smartphone, Monitor
+  Smartphone, Monitor, LayoutGrid, List as ListIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -217,6 +217,7 @@ export default function App() {
     const saved = localStorage.getItem('satuSopCategories');
     return saved ? JSON.parse(saved) : ["Keamanan", "Pembinaan", "Perawatan", "Tata Usaha"];
   });
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('satuSopViewMode') || 'grid');
   const [showSettings, setShowSettings] = useState(false);
   const [showSettingsPassword, setShowSettingsPassword] = useState(false);
   const [showSuperSettingsPassword, setShowSuperSettingsPassword] = useState(false);
@@ -287,6 +288,11 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
     localStorage.setItem('darkMode', isDarkMode);
   }, [isDarkMode]);
+
+  // Simpan preferensi mode tampilan (Grid/List)
+  useEffect(() => {
+    localStorage.setItem('satuSopViewMode', viewMode);
+  }, [viewMode]);
 
   // Efek Jam Live
   useEffect(() => {
@@ -489,12 +495,14 @@ export default function App() {
     const sop = sops.find(s => s.id === id);
     if (!sop) return;
     
-    if (db && fbUser) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id), { ...sop, isPinned: !sop.isPinned }, { merge: true });
-    } else {
-      setSops(prev => prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s));
-    }
+    // Pembaruan UI Langsung (Optimistic Update) untuk menghilangkan delay
+    setSops(prev => prev.map(s => s.id === id ? { ...s, isPinned: !s.isPinned } : s));
     showToast("Status pin SOP berhasil diperbarui!");
+    
+    // Kirim ke database secara background
+    if (db && fbUser) {
+      setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id), { ...sop, isPinned: !sop.isPinned }, { merge: true }).catch(console.error);
+    }
   };
 
   // Handler Simpan / Edit SOP (Versioning & Audit Trail)
@@ -560,12 +568,15 @@ export default function App() {
       
       delete updatedSop.file; // Menghindari error serialisasi pada firebase
 
-      if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', updatedSop.id), updatedSop);
-      } else {
-        setSops(sops.map(s => s.id === editingSop.id ? updatedSop : s));
-      }
+      // Pembaruan UI Langsung (Optimistic Update)
+      setSops(prev => prev.map(s => s.id === editingSop.id ? updatedSop : s));
       showToast("Data SOP & Riwayat Revisi berhasil diperbarui!");
+      setShowSopForm(false); // Langsung tutup modal tanpa delay
+
+      // Sinkronisasi Database secara background
+      if (db && fbUser) {
+        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', updatedSop.id), updatedSop).catch(console.error);
+      }
     } else {
       // SIMPAN DATA SOP BARU
       const newSop = { 
@@ -581,14 +592,16 @@ export default function App() {
 
       delete newSop.file; // Menghindari error serialisasi pada firebase
 
-      if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', sopId), newSop);
-      } else {
-        setSops([newSop, ...sops]);
-      }
+      // Pembaruan UI Langsung (Optimistic Update)
+      setSops(prev => [newSop, ...prev]);
       showToast("SOP Baru berhasil diupload!");
+      setShowSopForm(false); // Langsung tutup modal tanpa delay
+
+      // Sinkronisasi Database secara background
+      if (db && fbUser) {
+        setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', sopId), newSop).catch(console.error);
+      }
     }
-    setShowSopForm(false);
   };
 
   const handleDeleteSop = (id, e) => {
@@ -597,12 +610,14 @@ export default function App() {
       isOpen: true,
       message: "Apakah Anda yakin ingin menghapus SOP ini dari direktori secara permanen?",
       onConfirm: async () => {
-        if (db && fbUser) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id));
-        } else {
-          setSops(prev => prev.filter(s => s.id !== id));
-        }
+        // Pembaruan UI Langsung (Optimistic Update)
+        setSops(prev => prev.filter(s => s.id !== id));
         showToast("Dokumen SOP berhasil dihapus!");
+
+        // Sinkronisasi Database secara background
+        if (db && fbUser) {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sops', id)).catch(console.error);
+        }
       }
     });
   };
@@ -847,6 +862,11 @@ export default function App() {
                  </select>
                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none rotate-90" size={14}/>
               </div>
+              
+              <div className="flex bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-1.5 shrink-0">
+                <button onClick={() => setViewMode('grid')} className={`flex-1 flex justify-center items-center p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`} title="Mode Kotak"><LayoutGrid size={18}/></button>
+                <button onClick={() => setViewMode('list')} className={`flex-1 flex justify-center items-center p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`} title="Mode Daftar"><ListIcon size={18}/></button>
+              </div>
             </div>
           </div>
 
@@ -874,7 +894,7 @@ export default function App() {
             <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 mb-2">SOP Tidak Ditemukan</h3>
             <p className="text-sm font-bold text-slate-500">Coba gunakan kata kunci atau filter yang berbeda.</p>
           </div>
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div className={`grid gap-6 animate-in slide-in-from-bottom-12 duration-1000 delay-150 mb-10 ${isMobileView ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
             {paginatedSOPs.map((sop, idx) => {
               return (
@@ -939,6 +959,46 @@ export default function App() {
                 </div>
               );
             })}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 mb-10 w-full animate-in slide-in-from-bottom-12 duration-1000 delay-150">
+            {paginatedSOPs.map((sop, idx) => (
+              <div key={sop.id} className="glass-card p-4 rounded-2xl border border-slate-300 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col md:flex-row md:items-center gap-4 bg-white/60 dark:bg-slate-900/40 relative" style={{ animationDelay: `${idx * 50}ms` }}>
+                {isAdmin && (
+                  <div className="absolute top-2 right-2 md:relative md:top-0 md:right-0 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-opacity order-first md:order-last md:ml-auto">
+                    <button onClick={(e) => handleTogglePin(sop.id, e)} className={`p-2 rounded-lg transition-all shadow-sm ${sop.isPinned ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'}`} title={sop.isPinned ? "Lepas Sematan" : "Sematkan"}><Pin size={12} className={sop.isPinned ? "fill-current" : ""}/></button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingSop(sop); setFormData({...sop, file: null}); setShowSopForm(true); }} className="p-2 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-lg shadow-sm" title="Revisi/Edit"><Edit size={12}/></button>
+                    <button onClick={(e) => handleDeleteSop(sop.id, e)} className="p-2 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-lg shadow-sm" title="Hapus"><Trash2 size={12}/></button>
+                  </div>
+                )}
+                
+                <div className="flex-1 min-w-0 flex flex-col justify-center pr-20 md:pr-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500">{sop.category}</span>
+                    {sop.isPinned && <Pin size={10} className="text-amber-500 fill-current"/>}
+                    {(() => {
+                      const badge = getBadgeInfo(sop.date, sop.history);
+                      if (badge) return <span className={`px-1.5 py-0.5 text-white rounded text-[8px] font-black uppercase tracking-widest shadow-sm ${badge === 'BARU' ? 'bg-emerald-500' : 'bg-blue-500'}`}>{badge}</span>;
+                      return null;
+                    })()}
+                  </div>
+                  <h3 className="text-sm font-bold truncate text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">{sop.title}</h3>
+                </div>
+
+                <div className="hidden md:flex flex-col items-end gap-0.5 text-[9px] font-bold text-slate-400 w-32 shrink-0">
+                  {isAdmin && (
+                    <>
+                      <span className="flex items-center gap-1"><Clock size={10}/> {formatDateIndo(sop.date)}</span>
+                      <span className="flex items-center gap-1 text-blue-500"><User size={10}/> {sop.updatedBy}</span>
+                    </>
+                  )}
+                </div>
+
+                <button onClick={() => { setSelectedSOP(sop); setShowHistory(false); }} className="shrink-0 flex items-center justify-center px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm text-[10px] font-black uppercase tracking-widest gap-2 w-full md:w-auto mt-2 md:mt-0">
+                  Buka <ChevronRight size={14}/>
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
